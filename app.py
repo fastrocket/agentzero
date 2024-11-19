@@ -14,6 +14,7 @@ import shutil
 import requests
 from typing import List, Dict, Optional
 import time
+from content_generator import content_generator
 
 # Configure logging
 def setup_logging():
@@ -55,6 +56,210 @@ static_dir = Path("static")
 static_dir.mkdir(exist_ok=True)
 
 # Initialize component manager
+class ComponentManager:
+    def __init__(self):
+        self.components: Dict[str, ComponentState] = {}
+        self.state_file = "component_state.json"
+        self.load_state()
+
+    def get_components_needing_improvement(self) -> List[str]:
+        """Return a list of component names that need improvement"""
+        try:
+            components_to_improve = []
+            for name, component in self.components.items():
+                # Get improvement suggestions for this component
+                suggestions = self.evaluate_component(name)
+                if suggestions:
+                    components_to_improve.append(name)
+            return components_to_improve
+        except Exception as e:
+            logger.error(f"Error getting components needing improvement: {e}")
+            return []
+
+    def update_last_improvement_time(self, name: str) -> None:
+        """Update the last improvement time for a component"""
+        try:
+            if name in self.components:
+                self.components[name].last_improvement_time = time.time()
+                self._save_state()
+        except Exception as e:
+            logger.error(f"Error updating last improvement time for {name}: {e}")
+
+    def load_state(self):
+        """Load component state from file"""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                    for name, component_state in state.items():
+                        self.components[name] = ComponentState.from_dict(component_state)
+        except Exception as e:
+            logger.error(f"Error loading component state: {e}")
+
+    def _save_state(self):
+        """Save component state to file"""
+        try:
+            state = {}
+            for name, component in self.components.items():
+                state[name] = component.to_dict()
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=4)
+        except Exception as e:
+            logger.error(f"Error saving component state: {e}")
+
+    def extract_components(self, html_content: str):
+        """Extract components from HTML content"""
+        soup = BeautifulSoup(html_content, 'html.parser')
+        components = soup.find_all(attrs={'data-component': True})
+        for component in components:
+            name = component.get('data-component')
+            if name:
+                self.components[name] = ComponentState(name, str(component), 1, 0)
+
+    def get_component(self, name: str) -> Optional[ComponentState]:
+        """Get a component by name"""
+        return self.components.get(name)
+
+    def update_component(self, name: str, new_content: str) -> Optional[ComponentState]:
+        """Update a component with new content"""
+        if name in self.components:
+            self.components[name].content = new_content
+            self.components[name].version += 1
+            self._save_state()
+            return self.components[name]
+        return None
+
+    def evaluate_component(self, name: str) -> List[str]:
+        """Evaluate a component and return improvement suggestions"""
+        try:
+            component = self.get_component(name)
+            if not component:
+                return []
+
+            suggestions = []
+            soup = BeautifulSoup(component.content, 'html.parser')
+            
+            # Check content quality
+            text_content = soup.get_text(strip=True)
+            if len(text_content) < 100:  # Content is too short
+                suggestions.append('content depth')
+            
+            # Check for images
+            images = soup.find_all('img')
+            if not images:
+                suggestions.append('media integration')
+            
+            # Check semantic HTML
+            headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+            if not headings:
+                suggestions.append('semantic structure')
+            
+            # Check for interactive elements
+            interactive = soup.find_all(['button', 'a', 'input', 'form'])
+            if not interactive and name in ['navigation', 'header', 'footer']:
+                suggestions.append('interactivity')
+            
+            # Check for styling
+            style_tag = soup.find('style')
+            classes = [tag.get('class', []) for tag in soup.find_all()]
+            classes = [c for sublist in classes for c in sublist]  # Flatten list
+            if not style_tag and not classes:
+                suggestions.append('visual design')
+            
+            # Check for accessibility
+            aria_attrs = ['aria-label', 'aria-describedby', 'role', 'alt']
+            has_aria = any(tag.attrs.get(attr) for tag in soup.find_all() for attr in aria_attrs)
+            if not has_aria:
+                suggestions.append('accessibility')
+            
+            # Add suggestions based on component type
+            if name == 'content':
+                # Content section should be rich with information
+                paragraphs = soup.find_all('p')
+                if len(paragraphs) < 2:
+                    suggestions.append('text content quality')
+            
+            elif name == 'features':
+                # Features should have clear structure and visual elements
+                feature_items = soup.find_all(['div', 'section'])
+                if len(feature_items) < 3:
+                    suggestions.append('feature presentation')
+            
+            elif name == 'about':
+                # About section should have comprehensive information
+                if len(text_content) < 200:
+                    suggestions.append('about content depth')
+            
+            elif name == 'header':
+                # Header should have navigation and clear structure
+                nav = soup.find('nav')
+                if not nav:
+                    suggestions.append('navigation structure')
+            
+            elif name == 'footer':
+                # Footer should have links and contact info
+                links = soup.find_all('a')
+                if len(links) < 3:
+                    suggestions.append('footer content')
+            
+            # Log evaluation results
+            if suggestions:
+                logger.info(f"Component {name} needs improvements: {suggestions}")
+            
+            return suggestions
+            
+        except Exception as e:
+            logger.error(f"Error evaluating component {name}: {e}")
+            return ['error recovery']  # Return basic improvement suggestion on error
+
+    def reset(self):
+        """Reset the component manager state"""
+        try:
+            # Clear components dictionary
+            self.components.clear()
+            
+            # Remove state file if it exists
+            if os.path.exists(self.state_file):
+                os.remove(self.state_file)
+                
+            # Re-extract components from preview.html
+            preview_path = Path("templates/preview.html")
+            if preview_path.exists():
+                with open(preview_path, 'r', encoding='utf-8') as f:
+                    preview_html = f.read()
+                self.extract_components(preview_html)
+                
+            logger.info("Component manager state reset successfully")
+        except Exception as e:
+            logger.error(f"Error resetting component manager state: {e}")
+            raise
+
+class ComponentState:
+    def __init__(self, name: str, content: str, version: int = 1, last_improvement_time: float = 0):
+        self.name = name
+        self.content = content
+        self.version = version
+        self.last_improvement_time = last_improvement_time
+        
+    def to_dict(self) -> Dict:
+        """Convert component state to dictionary"""
+        return {
+            'name': self.name,
+            'content': self.content,
+            'version': self.version,
+            'last_improvement_time': self.last_improvement_time
+        }
+        
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'ComponentState':
+        """Create component state from dictionary"""
+        return cls(
+            name=data['name'],
+            content=data['content'],
+            version=data.get('version', 1),
+            last_improvement_time=data.get('last_improvement_time', 0)
+        )
+
 component_manager = ComponentManager()
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -110,8 +315,6 @@ class AgentLoop:
         self.active_connections: list[WebSocket] = []
         self.is_running = False
         self.current_task = None
-        self.min_improvement_interval = 5  # Minimum seconds between improvements
-        self.last_improvement_time = None
 
     async def register(self, websocket: WebSocket):
         """Register a new WebSocket connection"""
@@ -147,75 +350,39 @@ class AgentLoop:
         for connection in disconnected:
             await self.unregister(connection)
 
-    async def improvement_loop(self):
-        """Main improvement loop"""
-        try:
-            while self.is_running:
-                logger.info("Checking for improvements...")
-                
-                # Get current metrics
-                metrics = self.component_manager.get_all_metrics()
-                logger.info(f"Current metrics: \n{json.dumps(metrics, indent=2)}")
-                
-                # Get improvement suggestions
-                suggestions = await get_improvement_suggestions(metrics)
-                
-                if not suggestions:
-                    logger.info("No components need improvement")
-                    if not self.is_running:
-                        break
-                    await asyncio.sleep(10)  # Wait before next check
-                    continue
-                
-                # Process each suggestion
-                for suggestion in suggestions:
-                    if not self.is_running:
-                        break
+    async def run_agent(self):
+        """Run the agent to continuously improve components"""
+        while True:
+            try:
+                # Get components that need improvement
+                components = self.component_manager.get_components_needing_improvement()
+                if components:
+                    for name in components:
+                        # Get improvement suggestions
+                        suggestions = self.component_manager.evaluate_component(name)
+                        if suggestions:
+                            logger.info(f"Improving component {name} with suggestions: {suggestions}")
+                            success = await improve_component(name, suggestions)
+                            if success:
+                                logger.info(f"Successfully improved component {name}")
+                            else:
+                                logger.error(f"Failed to improve component {name}")
                         
-                    component_name = suggestion['component']
-                    score = suggestion['score']
-                    areas = suggestion['areas']
-                    priority = suggestion['priority']
-                    
-                    logger.info(f"Improving {component_name} (score: {score:.2f}, priority: {priority})")
-                    logger.info(f"Areas needing improvement: {', '.join(areas)}")
-                    
-                    # Run improvement in a background task to avoid blocking
-                    improvement_task = asyncio.create_task(improve_component(component_name, areas))
-                    try:
-                        await asyncio.wait_for(improvement_task, timeout=60)  # 60 second timeout
-                    except asyncio.TimeoutError:
-                        logger.error(f"Improvement task for {component_name} timed out")
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error in improvement task: {e}")
-                        continue
-                    
-                    if not self.is_running:
-                        break
-                        
-                    # Wait between improvements
-                    await asyncio.sleep(self.min_improvement_interval)
-                    
-                if not self.is_running:
-                    break
-                    
-                # Wait before next improvement cycle
-                await asyncio.sleep(5)
+                        # Update last improvement time regardless of success
+                        self.component_manager.update_last_improvement_time(name)
                 
-            logger.info("Improvement loop stopped")
-        except Exception as e:
-            logger.error(f"Error in improvement loop: {e}")
-            self.is_running = False
-        finally:
-            self.is_running = False
-            logger.info("Improvement loop cleanup complete")
+                # Small delay to prevent CPU overuse
+                await asyncio.sleep(0.1)
+                    
+            except Exception as e:
+                logger.error(f"Error in agent loop: {e}")
+                await asyncio.sleep(0.1)  # Brief delay on error
 
     async def start(self):
         """Start the improvement loop if not already running"""
         if not self.is_running:
             self.is_running = True
-            self.current_task = asyncio.create_task(self.improvement_loop())
+            self.current_task = asyncio.create_task(self.run_agent())
             return {'status': 'started'}
 
     async def stop(self):
@@ -299,7 +466,7 @@ async def startup_event():
         preview_path.write_text(DEFAULT_PREVIEW_TEMPLATE)
         
     # Initialize components from preview template
-    preview_html = get_current_preview()  # Now synchronous
+    preview_html = get_current_preview()
     component_manager.extract_components(preview_html)
     
     # Ensure all components are initialized
@@ -796,6 +963,49 @@ async def improve_component(name: str, suggestions: List[str]):
         if not component:
             logger.error(f"Component {name} not found")
             return False
+        
+        # If content improvement is needed and it's a content-heavy component
+        if any(s in ['content depth', 'text content quality', 'media integration'] for s in suggestions) and \
+           name in ['content', 'features', 'about']:
+            try:
+                # Extract topic from component
+                soup = BeautifulSoup(component.content, 'html.parser')
+                topic = soup.find('h1').text if soup.find('h1') else soup.find('h2').text if soup.find('h2') else name
+                
+                # Generate new content
+                article_html, image_urls = content_generator.generate_article(topic)
+                if article_html:
+                    # Create new component content with generated article
+                    new_content = f'<div data-component="{name}">{article_html}</div>'
+                    
+                    # Update component
+                    updated_component = component_manager.update_component(name, new_content)
+                    if not updated_component:
+                        logger.error(f"Failed to update component {name}")
+                        return False
+                    
+                    logger.info(f"Updated component {name} with generated content")
+                    
+                    # Broadcast preview update
+                    await agent.broadcast_update(name, new_content, updated_component.version)
+                    logger.info("Broadcast preview update")
+                    
+                    # Update preview.html
+                    preview_html = get_current_preview()
+                    soup = BeautifulSoup(preview_html, 'html.parser')
+                    old_component = soup.find(attrs={'data-component': name})
+                    if old_component:
+                        new_soup = BeautifulSoup(new_content, 'html.parser')
+                        old_component.replace_with(new_soup)
+                        preview_path = Path("templates/preview.html")
+                        preview_path.write_text(str(soup), encoding='utf-8')
+                        logger.info("Wrote changes to templates/preview.html")
+                    
+                    return True
+            
+            except Exception as e:
+                logger.error(f"Error generating content: {e}")
+                # Fall back to LLM improvement if content generation fails
             
         # Prepare prompt for LLM
         prompt = f"""You are an expert web developer. Improve this HTML component following these requirements EXACTLY:
@@ -871,15 +1081,6 @@ Example response:
                 preview_path.write_text(str(soup), encoding='utf-8')
                 logger.info("Wrote changes to templates/preview.html")
                 
-                # Broadcast file history update
-                await agent.broadcast_update('file_history', {
-                    'file': 'preview.html',
-                    'action': 'update',
-                    'component': name
-                }, 0)
-                logger.info("Broadcast file history update")
-                
-            logger.info(f"Successfully improved component {name}")
             return True
             
         except json.JSONDecodeError as e:

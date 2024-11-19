@@ -98,11 +98,14 @@ class ComponentManager:
             if filename.endswith('.json'):
                 name = filename[:-5]  # Remove .json
                 path = os.path.join(self.storage_dir, filename)
-                with open(path, 'r') as f:
-                    data = json.load(f)
-                    self.components[name] = ComponentState.from_dict(data)
-                    self.component_history[name] = []
-    
+                try:
+                    with open(path, 'r') as f:
+                        data = json.load(f)
+                        self.components[name] = ComponentState.from_dict(data)
+                        logger.info(f"Loaded component {name} version {self.components[name].version} with metrics")
+                except Exception as e:
+                    logger.error(f"Error loading component {name}: {e}")
+
     def _save_component(self, component: ComponentState):
         """Save component to disk"""
         path = self._get_component_path(component.name)
@@ -419,31 +422,27 @@ class ComponentManager:
         if component_name not in self.components:
             logger.warning(f"Component {component_name} not found")
             return {}
-
-        component = self.components[component_name]
-        metrics = {}
-        
+            
         try:
-            soup = BeautifulSoup(component.content, 'html.parser')
+            component = self.components[component_name]
             
-            # Design metrics
-            design_metrics = {
-                'layout': evaluate_layout(soup),
-                'style': evaluate_style(soup),
-                'responsiveness': evaluate_responsiveness(soup)
-            }
-            
-            # Content metrics
-            content_metrics = {
-                'text_quality': evaluate_text_content(soup),
-                'content_depth': evaluate_content_depth(soup),
-                'media_richness': evaluate_media_content(soup)
-            }
-            
+            # Calculate base metrics
             metrics = {
-                'design': design_metrics,
-                'content': content_metrics
+                'layout': evaluate_layout(component.content),
+                'style': evaluate_style(component.content),
+                'responsiveness': evaluate_responsiveness(component.content),
+                'content': {
+                    'text_quality': evaluate_text_content(component.content),
+                    'depth': evaluate_content_depth(component.content),
+                    'media': evaluate_media_content(component.content)
+                }
             }
+            
+            # Weight content metrics more heavily
+            content_weight = 2.0  # Content is twice as important
+            metrics['content']['text_quality'] *= content_weight
+            metrics['content']['depth'] *= content_weight
+            metrics['content']['media'] *= content_weight
             
             # Store metrics in component state
             component.metrics = metrics

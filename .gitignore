@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -22,7 +23,6 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
 
 # IDE
@@ -32,6 +32,11 @@ ENV/
 *.swo
 
 # Project specific
+component_state.json
+log.txt
+*.log
+
+# Generated files and directories
 archive/
 once/
 sequence/
@@ -40,24 +45,21 @@ log_archive/
 run_logs/
 tools/
 .env
-*.log
-log.txt
 
-# Components and state
-components/*.json
-state/*.json
-metrics/*.json
+# Components and state files
+components/
+*.json
+state/
+metrics/
 
-# Generated templates
+# Templates
+templates/index.html
 templates/preview.html
 templates/preview_*.html
-templates/index.html
 templates/generated/
-
-# Original templates
 templates/original/
 
-# Keep these template files
+# Keep specific template files
 !templates/base.html
 !templates/admin.html
 
