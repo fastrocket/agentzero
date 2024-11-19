@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+archive/
+once/
+sequence/
+library/
+log_archive/
+run_logs/
+tools/
+.env
+*.log
+log.txt
+
+# Templates - only track base templates
+templates/preview.html
+templates/preview_*.html
+templates/index.html
+
+# Keep these template files
+!templates/admin.html
+!templates/base.html

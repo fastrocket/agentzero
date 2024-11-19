@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Agent Admin</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .panel h1 {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.5em;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .file-history {
+            margin-top: 20px;
+        }
+        .file-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .file-name {
+            font-weight: bold;
+            color: #2c5282;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .preview-link {
+            display: inline-block;
+            margin: 20px;
+            padding: 10px 20px;
+            background: #4299e1;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .preview-link:hover {
+            background: #2b6cb0;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .metric-category {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .metric-category h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+            color: #2d3748;
+        }
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #edf2f7;
+        }
+        .metric-name {
+            color: #4a5568;
+        }
+        .metric-value {
+            font-weight: bold;
+            color: #2b6cb0;
+        }
+        .suggestions {
+            margin-top: 10px;
+            padding: 10px;
+            background: #ebf8ff;
+            border-radius: 4px;
+        }
+        .suggestions h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+            color: #2c5282;
+        }
+        .suggestions ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #2d3748;
+        }
+        .log-section {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .log-section.prompt {
+            background: #e6fffa;
+        }
+        .log-section.response {
+            background: #ebf8ff;
+        }
+        .log-section.thinking {
+            background: #faf5ff;
+        }
+        .log-title {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h1>Agent Logs</h1>
+            <div id="logContent"></div>
+        </div>
+        <div class="panel">
+            <h1>Metrics & Suggestions</h1>
+            <div id="metricsContent" class="metrics">
+                <!-- Metrics will be populated here -->
+            </div>
+            <div id="suggestionsContent" class="suggestions">
+                <!-- Suggestions will be populated here -->
+            </div>
+        </div>
+        <div class="panel">
+            <h1>File History</h1>
+            <div id="fileHistory" class="file-history"></div>
+        </div>
+    </div>
+    <a href="/preview" class="preview-link" target="_blank">Open Preview</a>
+
+    <script>
+        let socket;
+        
+        function connectWebSocket() {
+            socket = new WebSocket('ws://' + window.location.host + '/ws');
+            
+            socket.onopen = function(e) {
+                console.log('WebSocket connected');
+            };
+            
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'log_update') {
+                    updateLogs(data.message);
+                } else if (data.type === 'file_history') {
+                    updateFileHistory(data.files);
+                } else if (data.type === 'metrics_update') {
+                    updateMetrics(data.metrics, data.suggestions);
+                }
+            };
+            
+            socket.onclose = function(event) {
+                console.log('WebSocket disconnected, attempting to reconnect in 5s...');
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function updateLogs(logText) {
+            const container = document.getElementById('logContent');
+            const sections = logText.split(/={20,}/g).filter(Boolean);
+            
+            container.innerHTML = '';
+            sections.forEach(section => {
+                const [title, ...content] = section.trim().split('\n');
+                const div = document.createElement('div');
+                div.className = 'log-section ' + getCategoryClass(title);
+                
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'log-title';
+                titleDiv.textContent = title.trim();
+                
+                const contentPre = document.createElement('pre');
+                contentPre.textContent = content.join('\n').trim();
+                
+                div.appendChild(titleDiv);
+                div.appendChild(contentPre);
+                container.appendChild(div);
+            });
+        }
+        
+        function getCategoryClass(title) {
+            if (title.includes('PROMPT')) return 'prompt';
+            if (title.includes('RESPONSE')) return 'response';
+            return 'thinking';
+        }
+        
+        function updateMetrics(metrics, suggestions) {
+            const container = document.getElementById('metricsContent');
+            container.innerHTML = '';
+            
+            for (const [category, values] of Object.entries(metrics)) {
+                const div = document.createElement('div');
+                div.className = 'metric-category';
+                
+                const title = document.createElement('h2');
+                title.textContent = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                div.appendChild(title);
+                
+                for (const [name, value] of Object.entries(values)) {
+                    const metricDiv = document.createElement('div');
+                    metricDiv.className = 'metric-item';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'metric-name';
+                    nameSpan.textContent = name.replace(/_/g, ' ');
+                    
+                    const valueSpan = document.createElement('span');
+                    valueSpan.className = 'metric-value';
+                    valueSpan.textContent = value;
+                    
+                    metricDiv.appendChild(nameSpan);
+                    metricDiv.appendChild(valueSpan);
+                    div.appendChild(metricDiv);
+                }
+                
+                container.appendChild(div);
+            }
+            
+            const suggestionsDiv = document.getElementById('suggestionsContent');
+            suggestionsDiv.innerHTML = '<h2>Suggested Improvements</h2>';
+            const ul = document.createElement('ul');
+            suggestions.forEach(suggestion => {
+                const li = document.createElement('li');
+                li.textContent = suggestion;
+                ul.appendChild(li);
+            });
+            suggestionsDiv.appendChild(ul);
+        }
+        
+        function updateFileHistory(files) {
+            const container = document.getElementById('fileHistory');
+            container.innerHTML = '';
+            
+            files.forEach(file => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-item';
+                
+                const name = document.createElement('div');
+                name.className = 'file-name';
+                name.textContent = file.name;
+                
+                const timestamp = document.createElement('div');
+                timestamp.className = 'timestamp';
+                timestamp.textContent = new Date(file.timestamp * 1000).toLocaleString();
+                
+                fileDiv.appendChild(name);
+                fileDiv.appendChild(timestamp);
+                container.appendChild(fileDiv);
+            });
+        }
+        
+        // Initial connection
+        connectWebSocket();
+        
+        // Request updates periodically
+        setInterval(() => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send('get_updates');
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
