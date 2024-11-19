@@ -1,297 +1,213 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Agent Admin</title>
+    <title>Admin Panel</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
-        .panel {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .panel h1 {
-            margin-top: 0;
-            color: #333;
-            font-size: 1.5em;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #eee;
-        }
-        pre {
-            background: #f8f8f8;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-            font-size: 14px;
-            line-height: 1.5;
-            margin: 0;
-        }
-        .file-history {
-            margin-top: 20px;
-        }
-        .file-item {
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f8f8f8;
-            border-radius: 4px;
-        }
-        .file-name {
-            font-weight: bold;
-            color: #2c5282;
-        }
-        .timestamp {
-            color: #666;
-            font-size: 0.9em;
-        }
-        .preview-link {
-            display: inline-block;
-            margin: 20px;
-            padding: 10px 20px;
-            background: #4299e1;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            transition: background 0.2s;
-        }
-        .preview-link:hover {
-            background: #2b6cb0;
-        }
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-        .metric-category {
-            background: #f8f8f8;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .metric-category h2 {
-            margin: 0 0 10px 0;
-            font-size: 1.2em;
-            color: #2d3748;
-        }
-        .metric-item {
             display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px solid #edf2f7;
+            flex-direction: column;
+            height: 100vh;
         }
-        .metric-name {
-            color: #4a5568;
-        }
-        .metric-value {
-            font-weight: bold;
-            color: #2b6cb0;
-        }
-        .suggestions {
-            margin-top: 10px;
-            padding: 10px;
-            background: #ebf8ff;
+        
+        #log-content {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
             border-radius: 4px;
+            height: 80vh;
+            overflow-y: auto;
+            margin: 1rem 0;
         }
-        .suggestions h2 {
-            margin: 0 0 10px 0;
-            font-size: 1.2em;
-            color: #2c5282;
+        
+        .controls {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 1rem 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
         }
-        .suggestions ul {
-            margin: 0;
-            padding-left: 20px;
-            color: #2d3748;
+        
+        .auto-scroll {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        .log-section {
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f8f8f8;
-            border-radius: 4px;
-        }
-        .log-section.prompt {
-            background: #e6fffa;
-        }
-        .log-section.response {
-            background: #ebf8ff;
-        }
-        .log-section.thinking {
-            background: #faf5ff;
-        }
-        .log-title {
-            font-weight: bold;
-            color: #2d3748;
-            margin-bottom: 5px;
-        }
+        
+        /* Log colors */
+        .log-info { color: #85c1e9; }
+        .log-warning { color: #f7dc6f; }
+        .log-error { color: #ec7063; }
+        .log-debug { color: #aaa; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="panel">
-            <h1>Agent Logs</h1>
-            <div id="logContent"></div>
-        </div>
-        <div class="panel">
-            <h1>Metrics & Suggestions</h1>
-            <div id="metricsContent" class="metrics">
-                <!-- Metrics will be populated here -->
+    <main class="container">
+        <h1>Admin Dashboard</h1>
+        
+        <div class="controls">
+            <div class="auto-scroll">
+                <input type="checkbox" id="auto-scroll" checked>
+                <label for="auto-scroll">Auto-scroll</label>
             </div>
-            <div id="suggestionsContent" class="suggestions">
-                <!-- Suggestions will be populated here -->
-            </div>
+            <button onclick="clearLogs()">Clear Logs</button>
+            <button onclick="requestLogs()">Refresh Logs</button>
+            <button id="agent-button">Start Agent</button>
+            <button onclick="resetState()">Reset State</button>
+            <button onclick="promoteToProduction()">Promote to Production</button>
         </div>
-        <div class="panel">
-            <h1>File History</h1>
-            <div id="fileHistory" class="file-history"></div>
-        </div>
-    </div>
-    <a href="/preview" class="preview-link" target="_blank">Open Preview</a>
+        
+        <div id="log-content"></div>
+    </main>
 
     <script>
-        let socket;
+        let socket = new WebSocket("ws://" + window.location.host + "/ws");
+        let logContent = document.getElementById('log-content');
+        let autoScrollCheckbox = document.getElementById('auto-scroll');
+        let agentButton = document.getElementById('agent-button');
+        let isAgentRunning = false;
+        let lastScrollHeight = 0;
         
-        function connectWebSocket() {
-            socket = new WebSocket('ws://' + window.location.host + '/ws');
-            
-            socket.onopen = function(e) {
-                console.log('WebSocket connected');
-            };
-            
-            socket.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'log_update') {
-                    updateLogs(data.message);
-                } else if (data.type === 'file_history') {
-                    updateFileHistory(data.files);
-                } else if (data.type === 'metrics_update') {
-                    updateMetrics(data.metrics, data.suggestions);
-                }
-            };
-            
-            socket.onclose = function(event) {
-                console.log('WebSocket disconnected, attempting to reconnect in 5s...');
-                setTimeout(connectWebSocket, 5000);
-            };
-            
-            socket.onerror = function(error) {
-                console.error('WebSocket error:', error);
-            };
+        // Format log line with colors
+        function formatLogLine(line) {
+            if (line.includes(' - INFO - ')) return `<span class="log-info">${line}</span>`;
+            if (line.includes(' - WARNING - ')) return `<span class="log-warning">${line}</span>`;
+            if (line.includes(' - ERROR - ')) return `<span class="log-error">${line}</span>`;
+            if (line.includes(' - DEBUG - ')) return `<span class="log-debug">${line}</span>`;
+            return line;
         }
         
-        function updateLogs(logText) {
-            const container = document.getElementById('logContent');
-            const sections = logText.split(/={20,}/g).filter(Boolean);
+        // Update logs with auto-scroll
+        function updateLogs(content) {
+            // Split into lines and format each line
+            const formattedContent = content.split('\n')
+                .map(formatLogLine)
+                .join('\n');
+                
+            logContent.innerHTML = formattedContent;
             
-            container.innerHTML = '';
-            sections.forEach(section => {
-                const [title, ...content] = section.trim().split('\n');
-                const div = document.createElement('div');
-                div.className = 'log-section ' + getCategoryClass(title);
-                
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'log-title';
-                titleDiv.textContent = title.trim();
-                
-                const contentPre = document.createElement('pre');
-                contentPre.textContent = content.join('\n').trim();
-                
-                div.appendChild(titleDiv);
-                div.appendChild(contentPre);
-                container.appendChild(div);
-            });
-        }
-        
-        function getCategoryClass(title) {
-            if (title.includes('PROMPT')) return 'prompt';
-            if (title.includes('RESPONSE')) return 'response';
-            return 'thinking';
-        }
-        
-        function updateMetrics(metrics, suggestions) {
-            const container = document.getElementById('metricsContent');
-            container.innerHTML = '';
-            
-            for (const [category, values] of Object.entries(metrics)) {
-                const div = document.createElement('div');
-                div.className = 'metric-category';
-                
-                const title = document.createElement('h2');
-                title.textContent = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                
-                div.appendChild(title);
-                
-                for (const [name, value] of Object.entries(values)) {
-                    const metricDiv = document.createElement('div');
-                    metricDiv.className = 'metric-item';
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'metric-name';
-                    nameSpan.textContent = name.replace(/_/g, ' ');
-                    
-                    const valueSpan = document.createElement('span');
-                    valueSpan.className = 'metric-value';
-                    valueSpan.textContent = value;
-                    
-                    metricDiv.appendChild(nameSpan);
-                    metricDiv.appendChild(valueSpan);
-                    div.appendChild(metricDiv);
-                }
-                
-                container.appendChild(div);
+            if (autoScrollCheckbox.checked) {
+                logContent.scrollTop = logContent.scrollHeight;
+                lastScrollHeight = logContent.scrollHeight;
             }
-            
-            const suggestionsDiv = document.getElementById('suggestionsContent');
-            suggestionsDiv.innerHTML = '<h2>Suggested Improvements</h2>';
-            const ul = document.createElement('ul');
-            suggestions.forEach(suggestion => {
-                const li = document.createElement('li');
-                li.textContent = suggestion;
-                ul.appendChild(li);
-            });
-            suggestionsDiv.appendChild(ul);
         }
         
-        function updateFileHistory(files) {
-            const container = document.getElementById('fileHistory');
-            container.innerHTML = '';
-            
-            files.forEach(file => {
-                const fileDiv = document.createElement('div');
-                fileDiv.className = 'file-item';
-                
-                const name = document.createElement('div');
-                name.className = 'file-name';
-                name.textContent = file.name;
-                
-                const timestamp = document.createElement('div');
-                timestamp.className = 'timestamp';
-                timestamp.textContent = new Date(file.timestamp * 1000).toLocaleString();
-                
-                fileDiv.appendChild(name);
-                fileDiv.appendChild(timestamp);
-                container.appendChild(fileDiv);
-            });
-        }
-        
-        // Initial connection
-        connectWebSocket();
-        
-        // Request updates periodically
-        setInterval(() => {
+        // Request fresh logs
+        function requestLogs() {
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send('get_updates');
+                socket.send(JSON.stringify({ type: 'get_logs' }));
             }
-        }, 5000);
+        }
+        
+        // Clear logs
+        function clearLogs() {
+            logContent.innerHTML = '';
+            lastScrollHeight = 0;
+        }
+        
+        // Request logs periodically
+        setInterval(requestLogs, 1000);
+        
+        // Handle manual scroll
+        logContent.addEventListener('scroll', function() {
+            // If user scrolls up, disable auto-scroll
+            if (logContent.scrollTop < lastScrollHeight) {
+                autoScrollCheckbox.checked = false;
+            }
+        });
+        
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'log_update') {
+                updateLogs(data.message);
+            }
+        };
+
+        socket.onclose = function(event) {
+            console.log("WebSocket connection closed");
+            setTimeout(function() {
+                socket = new WebSocket("ws://" + window.location.host + "/ws");
+            }, 1000);
+        };
+
+        function startAgent() {
+            fetch('/start', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Agent started:', data);
+                isAgentRunning = true;
+                updateAgentButton();
+            })
+            .catch(error => console.error('Error starting agent:', error));
+        }
+
+        function stopAgent() {
+            fetch('/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Agent stopped:', data);
+                isAgentRunning = false;
+                updateAgentButton();
+            })
+            .catch(error => console.error('Error stopping agent:', error));
+        }
+
+        function updateAgentButton() {
+            agentButton.textContent = isAgentRunning ? 'Stop Agent' : 'Start Agent';
+            agentButton.className = isAgentRunning ? 'running' : '';
+        }
+
+        agentButton.onclick = function() {
+            if (isAgentRunning) {
+                stopAgent();
+            } else {
+                startAgent();
+            }
+        };
+
+        function resetState() {
+            if (!confirm('Are you sure you want to reset the state? This will delete all component history.')) {
+                return;
+            }
+            fetch('/reset', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('State reset:', data);
+                logContent.innerHTML = ''; // Clear logs after reset
+                isAgentRunning = false;
+                updateAgentButton();
+            })
+            .catch(error => console.error('Error resetting state:', error));
+        }
+
+        function promoteToProduction() {
+            fetch('/promote', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Promoted to production:', data);
+                alert(data.message || 'Successfully promoted to production');
+            })
+            .catch(error => {
+                console.error('Error promoting to production:', error);
+                alert('Error promoting to production');
+            });
+        }
     </script>
 </body>
 </html>
